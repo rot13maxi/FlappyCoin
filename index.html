@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Crypto Flappy Game</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #1a1a1a;
+            font-family: Arial, sans-serif;
+        }
+        #startScreen, #gameOverScreen {
+            text-align: center;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+        }
+        #gameCanvas {
+            display: none;
+            background: #000;
+            border: 2px solid #333;
+        }
+        input, button {
+            margin: 10px;
+            padding: 5px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+<div id="startScreen">
+    <h1>Name Your Token</h1>
+    <input type="text" id="tokenName" placeholder="e.g. MoonCoin">
+    <button id="startButton">Start Trading</button>
+</div>
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+<div id="gameOverScreen" style="display:none;">
+    <h1>Market Crash!</h1>
+    <p id="gameOverMessage"></p>
+    <button id="restartButton">Try Again</button>
+</div>
+<script>
+    // DOM Elements
+    const startScreen = document.getElementById('startScreen');
+    const tokenNameInput = document.getElementById('tokenName');
+    const startButton = document.getElementById('startButton');
+    const gameCanvas = document.getElementById('gameCanvas');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const gameOverMessage = document.getElementById('gameOverMessage');
+    const restartButton = document.getElementById('restartButton');
+    const ctx = gameCanvas.getContext('2d');
+
+    // Game State
+    let tokenName = '';
+    let gameState = 'start';
+    let scrollPosition = 0;
+    let priceY = 300; // Starting price position (middle of canvas)
+    let velocity = 0;
+    let obstacles = []; // Array of obstacle gaps
+    let obstacleSpacing = 300;
+    let gapHeight = 200;
+    let gravity = 0.6;
+    let jumpStrength = 12;
+    let score = 0;
+    let priceX = 100; // Fixed canvas x-position for price
+    let priceHistory = []; // For drawing the price line
+    let candles = []; // For drawing candlesticks
+    let lastCandleTime = 0;
+    let candleInterval = 100; // World x-distance between candles
+
+    // Initialize and Start Game
+    function startGame(name) {
+        tokenName = name || 'UnnamedToken';
+        startScreen.style.display = 'none';
+        gameCanvas.style.display = 'block';
+        gameOverScreen.style.display = 'none';
+
+        // Reset game variables
+        scrollPosition = 0;
+        priceY = 300;
+        velocity = 0;
+        obstacles = [];
+        score = 0;
+        priceHistory = [];
+        candles = [];
+        lastCandleTime = 0;
+        gameState = 'playing';
+
+        // Generate initial obstacle
+        generateObstacle(gameCanvas.width + obstacleSpacing);
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Main Game Loop
+    function gameLoop() {
+        if (gameState === 'playing') {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+    }
+
+    // Update Game State
+    function update() {
+        scrollPosition += 2.5; // Scroll speed
+        velocity += gravity;
+        priceY += velocity;
+
+        // Update price history
+        const worldX = scrollPosition + priceX;
+        priceHistory.push({ x: worldX, y: priceY });
+        while (priceHistory.length > 0 && priceHistory[0].x < scrollPosition) {
+            priceHistory.shift();
+        }
+
+        // Generate candlesticks every interval
+        if (worldX - lastCandleTime >= candleInterval) {
+            generateCandle();
+            lastCandleTime = worldX;
+        }
+
+        // Clean up old candles
+        candles = candles.filter(candle => candle.x > scrollPosition - candleInterval);
+
+        // Generate new obstacles
+        if (scrollPosition + gameCanvas.width >= obstacles[obstacles.length - 1].x) {
+            generateObstacle(obstacles[obstacles.length - 1].x + obstacleSpacing);
+        }
+
+        // Remove off-screen obstacles
+        obstacles = obstacles.filter(ob => ob.x + 60 > scrollPosition);
+
+        // Collision detection
+        const currentObstacle = obstacles.find(ob =>
+            priceX >= (ob.x - scrollPosition) && priceX <= (ob.x - scrollPosition + 60)
+        );
+        if (currentObstacle) {
+            if (priceY <= currentObstacle.gapTop || priceY >= currentObstacle.gapBottom) {
+                gameOver();
+            }
+        }
+
+        // Boundary check
+        if (priceY < 0 || priceY > gameCanvas.height) {
+            gameOver();
+        }
+
+        score += 1;
+    }
+
+    // Generate Obstacle (Market Event)
+    function generateObstacle(x) {
+        const minGap = 50;
+        const maxGap = gameCanvas.height - gapHeight - 50;
+        const gapTop = minGap + Math.random() * (maxGap - minGap);
+        obstacles.push({
+            x: x,
+            gapTop: gapTop,
+            gapBottom: gapTop + gapHeight
+        });
+    }
+
+    // Generate Candlestick
+    function generateCandle() {
+        const intervalHistory = priceHistory.filter(p =>
+            p.x > lastCandleTime - candleInterval && p.x <= lastCandleTime
+        );
+        if (intervalHistory.length < 2) return;
+        const open = intervalHistory[0].y;
+        const close = intervalHistory[intervalHistory.length - 1].y;
+        const high = Math.min(...intervalHistory.map(p => p.y));
+        const low = Math.max(...intervalHistory.map(p => p.y));
+        candles.push({
+            x: lastCandleTime,
+            open: open,
+            close: close,
+            high: high,
+            low: low,
+            color: close > open ? '#0f0' : '#f00' // Green for up, red for down
+        });
+    }
+
+    // Draw Everything
+    function draw() {
+        ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+
+        // Draw grid
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        for (let y = 50; y < gameCanvas.height; y += 50) {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(gameCanvas.width, y);
+            ctx.stroke();
+        }
+        const gridSpacing = 100;
+        const leftmost = Math.floor(scrollPosition / gridSpacing) * gridSpacing;
+        for (let x = leftmost; x < scrollPosition + gameCanvas.width; x += gridSpacing) {
+            const canvasX = x - scrollPosition;
+            ctx.beginPath();
+            ctx.moveTo(canvasX, 0);
+            ctx.lineTo(canvasX, gameCanvas.height);
+            ctx.stroke();
+        }
+
+        // Draw candlesticks
+        ctx.lineWidth = 2;
+        candles.forEach(candle => {
+            const x = candle.x - scrollPosition;
+            if (x > -10 && x < gameCanvas.width) {
+                // Draw wick
+                ctx.strokeStyle = candle.color;
+                ctx.beginPath();
+                ctx.moveTo(x, candle.high);
+                ctx.lineTo(x, candle.low);
+                ctx.stroke();
+                // Draw body
+                ctx.fillStyle = candle.color;
+                ctx.fillRect(x - 5, Math.min(candle.open, candle.close), 10, Math.abs(candle.close - candle.open));
+            }
+        });
+
+        // Draw obstacles (market events)
+        ctx.fillStyle = '#555';
+        obstacles.forEach(ob => {
+            const x = ob.x - scrollPosition;
+            if (x + 60 > 0 && x < gameCanvas.width) {
+                ctx.fillRect(x, 0, 60, ob.gapTop);
+                ctx.fillRect(x, ob.gapBottom, 60, gameCanvas.height - ob.gapBottom);
+                ctx.fillStyle = '#fff';
+                ctx.font = '12px Arial';
+                ctx.fillText('Market Event', x + 5, ob.gapTop - 10);
+            }
+        });
+
+        // Draw price history line
+        if (priceHistory.length > 1) {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            let first = true;
+            for (const point of priceHistory) {
+                const canvasX = point.x - scrollPosition;
+                if (first) {
+                    ctx.moveTo(canvasX, point.y);
+                    first = false;
+                } else {
+                    ctx.lineTo(canvasX, point.y);
+                }
+            }
+            ctx.stroke();
+        }
+
+        // Draw current price point
+        ctx.fillStyle = '#0f0';
+        ctx.beginPath();
+        ctx.arc(priceX, priceY, 5, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Draw score and token name
+        ctx.fillStyle = '#fff';
+        ctx.font = '20px Arial';
+        ctx.fillText(`${tokenName}: ${score}`, 10, 30);
+    }
+
+    // Handle Game Over
+    function gameOver() {
+        gameState = 'gameover';
+        gameCanvas.style.display = 'none';
+        gameOverScreen.style.display = 'block';
+        gameOverMessage.textContent = `Your token ${tokenName} has crashed to zero! Score: ${score}`;
+    }
+
+    // Event Listeners
+    startButton.addEventListener('click', () => {
+        const name = tokenNameInput.value.trim();
+        startGame(name);
+    });
+
+    restartButton.addEventListener('click', () => {
+        startGame(tokenName);
+    });
+
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space' && gameState === 'playing') {
+            e.preventDefault();
+            velocity = -jumpStrength;
+        }
+    });
+</script>
+</body>
+</html>
