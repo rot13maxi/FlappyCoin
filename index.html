@@ -43,6 +43,23 @@
         button:hover {
             background: #555;
         }
+        #pumpButton {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #4caf50;
+            border: none;
+            color: white;
+            font-size: 16px;
+            display: none;
+            z-index: 100;
+        }
+        #pumpButton:active {
+            background: #388e3c;
+        }
     </style>
 </head>
 <body>
@@ -52,6 +69,7 @@
     <button id="startButton">Start Trading</button>
 </div>
 <canvas id="gameCanvas" width="800" height="600"></canvas>
+<button id="pumpButton">PUMP</button>
 <div id="gameOverScreen" style="display:none;">
     <h1>Market Crash!</h1>
     <p id="gameOverMessage"></p>
@@ -67,6 +85,7 @@
     const gameOverMessage = document.getElementById('gameOverMessage');
     const restartButton = document.getElementById('restartButton');
     const ctx = gameCanvas.getContext('2d');
+    const pumpButton = document.getElementById('pumpButton');
 
     // Game Constants
     const GRAVITY = 0.6;
@@ -114,6 +133,7 @@
         startScreen.style.display = 'none';
         gameCanvas.style.display = 'block';
         gameOverScreen.style.display = 'none';
+        pumpButton.style.display = 'block';
 
         // Reset variables
         scrollPosition = 0;
@@ -342,7 +362,7 @@
         ctx.fillStyle = '#fff';
         ctx.textAlign = 'left';
         ctx.font = 'bold 20px Arial';
-        ctx.fillText(`${tokenName}: $${(100 + score * 5).toFixed(2)}`, 10, 30);
+        ctx.fillText(`${tokenName}: $${(100 + score * 10).toFixed(2)}`, 10, 30);
 
         // Instructions
         ctx.font = '14px Arial';
@@ -357,13 +377,31 @@
     function gameOver() {
         gameState = 'gameover';
         gameCanvas.style.display = 'none';
+        pumpButton.style.display = 'none';
         gameOverScreen.style.display = 'block';
-        gameOverMessage.textContent = `Your token ${tokenName} has crashed to zero! Final Score: ${score}`;
+        const finalPrice = 100 + score * 10; // Match the in-game calculation
+        gameOverMessage.textContent = `Your token ${tokenName} has crashed to zero! Final Price: $${finalPrice.toFixed(2)}`;
     }
 
     // Event Listeners
     startButton.addEventListener('click', startGame);
     restartButton.addEventListener('click', startGame);
+    
+    // Fix the pump button functionality - add both touch and click handlers
+    pumpButton.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (gameState === 'playing') {
+            velocity = -JUMP_STRENGTH;
+        }
+    });
+    
+    // Add regular click event for desktop users
+    pumpButton.addEventListener('click', (e) => {
+        if (gameState === 'playing') {
+            velocity = -JUMP_STRENGTH;
+        }
+    });
+    
     window.addEventListener('keydown', (e) => {
         if (e.code === 'Space' && gameState === 'playing') {
             e.preventDefault();
